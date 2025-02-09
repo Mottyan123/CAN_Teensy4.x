@@ -34,10 +34,11 @@ bool can_send16(uint16_t id, int16_t data[], uint8_t size) {
 }
 
 /*8bit_data 受信*/
-void can_recv8(uint16_t id, int8_t data[]) {
+void can_recv8(uint16_t id, int8_t data[], uint8_t len) {
     if (can2.read(msg)) {
         if (msg.id == id) {
             uint8_t size = msg.len;
+            len = size;
 
             for (int i = 0; i < size; i++) {
                 data[i] = (int8_t)msg.buf[i];
@@ -47,10 +48,11 @@ void can_recv8(uint16_t id, int8_t data[]) {
 }
 
 /*16bit_data 受信*/
-void can_recv16(uint16_t id, int16_t data[]) {
+void can_recv16(uint16_t id, int16_t data[], uint8_t len) {
     if (can2.read(msg)) {
         if (msg.id == id) {
             uint8_t size = msg.len;
+            len = size/2;
 
             for (int i = 0; i < size/2; i++) {
                 data[i] = (int16_t)((msg.buf[i*2+1] << 8) | msg.buf[i*2]);
