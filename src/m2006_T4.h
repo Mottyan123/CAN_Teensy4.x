@@ -17,7 +17,7 @@
 #include <Arduino.h>
 #include <FlexCAN_T4.h>
 
-bool can_init(int speed);
+bool can_init(int speed = 1000000);
 extern FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> can2; // CANインスタンスのグローバル宣言
 extern CAN_message_t msg;
 void m2006_make_data(int16_t data_in[8], uint8_t data_out1[8], uint8_t data_out2[8]);
