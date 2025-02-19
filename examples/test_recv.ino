@@ -5,6 +5,7 @@
 uint8_t len;
 int8_t recv_data8[8];
 int16_t recv_data16[4];
+float recv_dataF16[4];
 
 void setup() {
     Serial.begin(115200);
@@ -27,6 +28,14 @@ void loop() {
     Serial.print("recv_data16: ");
     for (int i = 0; i < len; i++) {
         Serial.print(recv_data16[i]);
+        Serial.print(" ");
+    }
+    Serial.println();
+
+    can_recvF16(0x303, recv_dataF16, len);
+    Serial.print("recv_dataU16: ");
+    for (int i = 0; i < len; i++) {
+        Serial.print(recv_dataF16[i]);
         Serial.print(" ");
     }
     Serial.println();
