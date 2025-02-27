@@ -11,15 +11,15 @@
 #define DIR_PIN 21 //ピンには何も接続しない
 
 // AS5600_TCA9548A
-float offset1[4] = {0.0, 0.0, 0.0, 0.0}; // offset1は現在角度を0にするためのオフセット値(電源をいれた時に0になる)
-float offset2[4] = {0.0, 0.0, 0.0, 0.0}; // offset2はエンコーダの原点を変更するためのオフセット値
-float current_ABS_angle[4] = {0.0, 0.0, 0.0, 0.0}; // AS5600の現在の角度(4個分) 
+float offset[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // offsetはエンコーダの原点を変更するためのオフセット値
+float current_ABS_angle[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // AS5600の現在の角度(8個分) 
 
 long dt = 0.0;
 long before_time = 0.0;
 
 int motor_list[8] = {0, 2, 2, 2, 2, 2, 2, 2}; //モータの種類(0=m2006,1=m3508,2=なし)
 int16_t mode[8] = {1, 0, 0, 0, 0, 0, 0, 0}; //モード(0=速度制御,1=位置制御(内部エンコーダ),2=位置制御(外部エンコーダ))
+const float gear_ratio = 1.0; //回転軸に対してのエンコーダの回転比 
 
 //DJI_CANID(変更不可)
 int id[8] = {0x201, 0x202, 0x203, 0x204, 0x205, 0x206, 0x207, 0x208};
@@ -69,9 +69,6 @@ void setup() {
     Serial.println("> AS5600_TCA9548A: Started.");
     delay(1000);
 
-    /*初期角度の取得*/
-    as5600_tca9548a_get_offset(offset1);
-
     while(!can_init(CAN_SPEED)) {
         Serial.println("CAN init fail, retry...");
         delay(1000);
@@ -119,7 +116,7 @@ void loop() {
                 }
             }
             else if(mode[i] == 2){
-                get_now_angle(current_ABS_angle, offset2); //ABSエンコーダの角度を取得
+                get_now_angle(current_ABS_angle, offset, gear_ratio); //ABSエンコーダの角度を取得
             }
         }
     }
