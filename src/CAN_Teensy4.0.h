@@ -5,6 +5,7 @@
 #include "FlexCAN_T4.h"
 #include "m2006_T4.h"
 #include "pid.h"
+#include "as5600_tca9548a.h"
 
 bool can_send8(uint16_t id /*CAN ID*/, int8_t data[] /*-128~127*/, uint8_t size);
 bool can_send16(uint16_t id /*CAN ID*/, int16_t data[] /*-32768~32767*/, uint8_t size);
