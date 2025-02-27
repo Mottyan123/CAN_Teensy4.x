@@ -1,16 +1,25 @@
 #include <Arduino.h>
-#include "pid.h"
-#include "m2006_T4.h"
 #include <TeensyThreads.h>
+#include "CAN_Teensy4.0.h"
 
 //CAN
 #define CAN_SPEED 1000000 // 1Mbps
 
-float before_time = 0.0;
+//アブソリュートエンコーダの設定(I2C)
+#define SDA_PIN 18
+#define SCL_PIN 19
+#define DIR_PIN 21 //ピンには何も接続しない
 
-int motor_list[8] = {0, 2, 2, 2, 2, 2, 2, 2};//モータの種類(0=m2006,1=m3508,2=なし)
-//モード(0=速度制御,1=位置制御)
-int16_t mode[8] = {1, 1, 1, 1, 1, 1, 1, 1};
+// AS5600_TCA9548A
+float offset1[4] = {0.0, 0.0, 0.0, 0.0}; // offset1は現在角度を0にするためのオフセット値(電源をいれた時に0になる)
+float offset2[4] = {0.0, 0.0, 0.0, 0.0}; // offset2はエンコーダの原点を変更するためのオフセット値
+float current_ABS_angle[4] = {0.0, 0.0, 0.0, 0.0}; // AS5600の現在の角度(4個分) 
+
+long dt = 0.0;
+long before_time = 0.0;
+
+int motor_list[8] = {0, 2, 2, 2, 2, 2, 2, 2}; //モータの種類(0=m2006,1=m3508,2=なし)
+int16_t mode[8] = {1, 0, 0, 0, 0, 0, 0, 0}; //モード(0=速度制御,1=位置制御(内部エンコーダ),2=位置制御(外部エンコーダ))
 
 //DJI_CANID(変更不可)
 int id[8] = {0x201, 0x202, 0x203, 0x204, 0x205, 0x206, 0x207, 0x208};
@@ -28,104 +37,111 @@ int16_t mangle[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // M2006の8個分の角度値(16b
 int16_t mrpm[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // M2006の8個分の回転数値(16bit)
 int16_t mtorque[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // M2006の8個分のトルク値(16bit)電流値
 float angle[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};//角度
-float first_angle[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float rpm[8] = {0.0, 0.0, 0.0, 0.0, 0.0,0.0, 0.0, 0.0};//回転数
 float torque[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};//トルク
 
 //角度制御用変数
-float dif_angle[8] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-float before_angle[8] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
 float output_angle[8] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-float count[8] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-
-//外部入力
-int16_t input_data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+float deg[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 void one(){
-  while(1){
-    //target_rpm[0] = 50.0;
+    while(1){
+        target_pos[0] = 0.0;
+        threads.delay(1000);
+        target_pos[0] = 90.0;
+        threads.delay(1000);
 
-    target_pos[0] = 0.0;
-    threads.delay(1000);
-    target_pos[0] = 90.0;
-    threads.delay(1000);
-  }
+        threads.delay(1);
+    }
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(500);
-  Serial.println("Start");
+    Serial.begin(115200);
+    delay(500);
+    Serial.println("Start");
 
-  while(!can_init(CAN_SPEED)) {
-  Serial.println("CAN init fail, retry...");
-  delay(1000);
-  }
+    /*I2Cのピンをプルアップ*/
+    pinMode(SDA_PIN, INPUT_PULLUP);
+    pinMode(SCL_PIN, INPUT_PULLUP);
 
-  for(int i = 0; i < 8; i++) {
-    //設定したモータのデータを読み込む
-    if(motor_list[i]==2){
-    }else{
-    while(!m2006_read_data(id[i], mangle, mrpm, mtorque)) {
+    /*tca9548aの初期化*/
+    as5600_tca9548a_init(DIR_PIN);
+    Serial.println("> AS5600_TCA9548A: Started.");
+    delay(1000);
+
+    /*初期角度の取得*/
+    as5600_tca9548a_get_offset(offset1);
+
+    while(!can_init(CAN_SPEED)) {
+        Serial.println("CAN init fail, retry...");
+        delay(1000);
     }
+
+    /*DJIモータのデータ読み込み*/
+    for(int i = 0; i < 8; i++) {
+        if(motor_list[i]==2){
+        }
+        else{
+            while(!m2006_read_data(id[i], mangle, mrpm, mtorque)) {
+            }
+            angle[i] = (float)mangle[i];
+            rpm[i] = (float)mrpm[i];
+            torque[i] = (float)mtorque[i];
+        }
     }
-    angle[i] = (float)mangle[i];
-    rpm[i] = (float)mrpm[i];
-    torque[i] = (float)mtorque[i];
-    // before_angle[i] = angle[i];
-    // first_angle[i] = angle[i];
-  }
-  Serial.println(angle[0]);
-  
-  threads.addThread(one);//スレッドの追加
+    threads.addThread(one);//スレッドの追加
 }
 
 void loop() {
-  float dt = millis() - before_time;
-  before_time = millis();
-  //DJIモータのデータ読み込み
-  for(int i = 0; i < 8; i++) {
-    if(motor_list[i]==2){
-    }else{
-      while(!m2006_read_data(id[i], mangle, mrpm, mtorque)) {
-      }
-      angle[i] = (float)mangle[i];
-      rpm[i] = (float)mrpm[i];
-      torque[i] = (float)mtorque[i];
+    dt = millis() - before_time;
+    before_time = millis();
 
-      dif_angle[i] = angle[i] - before_angle[i];
-      before_angle[i] = angle[i];
-      if(dif_angle[i] > 180.0){
-        count[i] -= 1.0;
-      }else if(dif_angle[i] < -180.0){
-        count[i] += 1.0;
-      }
-      if(motor_list[i]==0){
-        output_angle[i] = ((count[i]*360.0 + angle[i]))/36.0;//m2006の出力軸角度
-      }else if(motor_list[i]==1){
-        output_angle[i] = ((count[i]*360.0 + angle[i]))/19.0;//m3508の出力軸角度
-      }
-      //output_angle[i] = ((count[i]*360.0 + angle[i]))/36.0;
-    }
-  }
-  for(int i = 0; i < 8; i++) {
-    if(motor_list[i]==2){
-    }else{
-      if(mode[i] == 0) {
-        current_data[i] = speed_PI(id[i], motor_list[i], target_rpm[i], rpm[i], torque[i], dt);
-      } else if(mode[i] == 1) {
-        current_data[i] = position_PPI(id[i], motor_list[i], target_pos[i], output_angle[i], first_angle[i], rpm[i], torque[i], dt);
-      }
-    }
-  }
-  //DJIに電流値を送信用のデータに変換する
-  m2006_make_data(current_data, send_data1, send_data2);
-  //DJIにデータを送信する
-  m2006_send_data(send_data1, send_data2);
-  //Serial.println(rpm[0]);
-  Serial.println(">rpm:"+String(rpm[0]/36));//この書きかたで変数をplotすることができる。
-  Serial.println(">angle:"+String(output_angle[0]));//この書きかたで変数をplotすることができる。
+    /*DJIモータのデータ読み込み*/
+    for(int i = 0; i < 8; i++) {
+        if(motor_list[i]==2){
+        }
+        else{
+            while(!m2006_read_data(id[i], mangle, mrpm, mtorque)) {
+            }
+            angle[i] = (float)mangle[i];
+            rpm[i] = (float)mrpm[i];
+            torque[i] = (float)mtorque[i];
 
-  //Serial.println("output_angle[0]:"+String(output_angle[0])+"output_angle[2]:"+String(output_angle[2])+"current_data[0]:"+String(current_data[0])+"current_data[2]:"+String(current_data[2]));
+            /*現在角度を計算＆取得*/
+            if(mode[i] == 1) {  
+                if(motor_list[i]==0){
+                    deg[i] = (rpm[i]/36.0)*360.0/60.0; //rpmから角速度(deg/s)に変換
+                    output_angle[i] += deg[i]*dt/1000.0; //degのみに変換
+                }
+                else if(motor_list[i]==1){
+                    deg[i] = (rpm[i]/19.0)*360.0/60.0; //rpmから角速度(deg/s)に変換
+                    output_angle[i] += deg[i]*dt/1000.0; //degのみに変換
+                }
+            }
+            else if(mode[i] == 2){
+                get_now_angle(current_ABS_angle, offset2); //ABSエンコーダの角度を取得
+            }
+        }
+    }
+
+    /*各モータのPI制御*/
+    for(int i = 0; i < 8; i++) {
+        if(motor_list[i]==2){
+        }
+        else{
+            if(mode[i] == 0) {
+                current_data[i] = speed_PI(id[i], motor_list[i], target_rpm[i], rpm[i], torque[i], dt);
+            } 
+            else if(mode[i] == 1) {
+                current_data[i] = position_PPI(id[i], motor_list[i], target_pos[i], output_angle[i], rpm[i], torque[i], dt);
+            } 
+            else if(mode[i] == 2) {
+                current_data[i] = position_PPI(id[i], motor_list[i], target_pos[i], current_ABS_angle[i], rpm[i], torque[i], dt);
+            }
+        }
+    }
+
+    /*CANで制御値送信*/
+    m2006_make_data(current_data, send_data1, send_data2); //DJIに電流値を送信用のデータに変換する
+    m2006_send_data(send_data1, send_data2); //DJIにデータを送信する
 }
-
