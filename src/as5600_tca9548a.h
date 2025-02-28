@@ -9,6 +9,6 @@
 void as5600_tca9548a_init(int dir_pin);
 void as5600_tca9548a_get_offset(float offset1[8]);
 void as5600_tca9548a_get_current_angle(float current_angle[4], float offset1[4], float offset2[4]);
-void get_now_angle(float current_angle[8],float offset2[8],float gear_raito);
+void get_now_angle(int i, float current_angle[8],float offset2[8],float gear_raito);
 
 #endif // __AS5600_TCA9548A_H__
