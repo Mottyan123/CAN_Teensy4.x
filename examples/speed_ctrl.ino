@@ -113,7 +113,7 @@ void loop() {
                 }
             }
             else if(mode[i] == 2){
-                get_now_angle(current_ABS_angle, offset, gear_ratio); //ABSエンコーダの角度を取得
+                get_now_angle(i, current_ABS_angle, offset, gear_ratio); //指定したABSエンコーダの角度を取得
             }
         }
     }
