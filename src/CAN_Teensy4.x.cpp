@@ -1,4 +1,4 @@
-#include "CAN_Teensy4.0.h"
+#include "CAN_Teensy4.x.h"
 
 const int SCALE = 100;
 
