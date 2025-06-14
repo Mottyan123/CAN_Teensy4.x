@@ -66,8 +66,9 @@ void as5600_tca9548a_get_current_angle(float current_angle[4], float offset1[4],
 }
 
 //現在の角度を取得する
-void get_now_angle(int i, float current_angle[8], float offset2[8], float gear_ratio){
+void get_now_angle(int i, float current_angle[8], float offset_angle, float gear_ratio, int encoder_pm) {
   I2CMux.openChannel(i);
-  current_angle[i] = (as5600[i].getCumulativePosition() * AS5600_RAW_TO_DEGREES/gear_ratio)+offset2[i];
+  current_angle[i] = (as5600[i].getCumulativePosition() * AS5600_RAW_TO_DEGREES / gear_ratio) + offset_angle;
+  current_angle[i] *= encoder_pm;
   I2CMux.closeChannel(i);
 }
