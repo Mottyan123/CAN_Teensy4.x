@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <TeensyThreads.h>
-#include "CAN_Teensy4.0.h"
+#include "CAN_Teensy4.x.h"
 
 //CAN
 #define CAN_SPEED 1000000 // 1Mbps
@@ -19,7 +19,10 @@ long before_time = 0.0;
 
 int motor_list[8] = {0, 2, 2, 2, 2, 2, 2, 2}; //モータの種類(0=m2006,1=m3508,2=なし)
 int16_t mode[8] = {2, 0, 0, 0, 0, 0, 0, 0}; //モード(0=速度制御,1=位置制御(内部エンコーダ),2=位置制御(外部エンコーダ))
-const float gear_ratio = 1.0; //回転軸に対してのエンコーダの回転比 
+const int encoder_pm[8] = {1, 1, 1, 1, 1, 1, 1, 1}; //エンコーダの正負方向設定(1 = 正転, -1 = 反転)
+const float gear_ratio[8] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0}; //モータに対してのエンコーダの回転比(出力軸とは別にエンコーダがついている場合は1.0)
+int motor_power[8] ={100, 100, 100, 100, 100, 100, 100, 100}; //モータの出力トルク(100%換算)
+int motor_speed[8] = {100, 100, 100, 100, 100, 100, 100, 100}; //モータの回転速度(100%換算)
 
 //DJI_CANID(変更不可)
 int id[8] = {0x201, 0x202, 0x203, 0x204, 0x205, 0x206, 0x207, 0x208};
@@ -48,7 +51,7 @@ void one(){
     while(1){
         target_pos[0] = 0.0;
         threads.delay(1000);
-        target_pos[0] = 90.0;
+        target_pos[0] = 360.0;
         threads.delay(1000);
 
         threads.delay(1);
@@ -116,7 +119,7 @@ void loop() {
                 }
             }
             else if(mode[i] == 2){
-                get_now_angle(i, current_ABS_angle, offset, gear_ratio); //指定したABSエンコーダの角度を取得
+                get_now_angle(i, current_ABS_angle, offset[i], gear_ratio[i], encoder_pm[i]); //指定したABSエンコーダの角度を取得
             }
         }
     }
@@ -127,13 +130,13 @@ void loop() {
         }
         else{
             if(mode[i] == 0) {
-                current_data[i] = speed_PI(id[i], motor_list[i], target_rpm[i], rpm[i], torque[i], dt);
+                current_data[i] = speed_PI(id[i], motor_list[i], motor_power[i], target_rpm[i], rpm[i], torque[i], dt);
             } 
             else if(mode[i] == 1) {
-                current_data[i] = position_PPI(id[i], motor_list[i], target_pos[i], output_angle[i], rpm[i], torque[i], dt);
+                current_data[i] = position_PPI(id[i], motor_list[i], motor_power[i], motor_speed[i], target_pos[i], output_angle[i], rpm[i], torque[i], dt);
             } 
             else if(mode[i] == 2) {
-                current_data[i] = position_PPI(id[i], motor_list[i], target_pos[i], current_ABS_angle[i], rpm[i], torque[i], dt);
+                current_data[i] = position_PPI(id[i], motor_list[i], motor_power[i], motor_speed[i], target_pos[i], current_ABS_angle[i], rpm[i], torque[i], dt);
             }
         }
     }
